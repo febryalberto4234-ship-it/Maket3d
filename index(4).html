@@ -1,0 +1,1785 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>3D AR Maket Kampus A - Poltekkes Kemenkes Palangka Raya</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Inter -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <!-- Three.js & OrbitControls -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <!-- QRCode.js untuk generator QR Code stiker maket -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <style>
+    * {
+      font-family: 'Inter', sans-serif;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: #0f172a;
+    }
+    #canvas-container {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 10;
+    }
+    #ar-video {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: 1;
+      display: none;
+    }
+    /* Custom scrollbar untuk daftar gedung */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    /* Dukungan geser horizontal & drag mulus untuk bar bawah */
+    #building-buttons {
+      touch-action: pan-x;
+      -webkit-overflow-scrolling: touch;
+      cursor: grab;
+    }
+    #building-buttons:active {
+      cursor: grabbing;
+    }
+    /* Floating HTML Labels untuk Pin A-L */
+    .pin-label {
+      position: absolute;
+      transform: translate(-50%, -50%);
+      pointer-events: auto;
+      cursor: pointer;
+      transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.2s;
+      user-select: none;
+      z-index: 20;
+    }
+    .pin-label:hover {
+      transform: translate(-50%, -58%) scale(1.18);
+      z-index: 30;
+    }
+    .pin-label.active {
+      transform: translate(-50%, -62%) scale(1.25);
+      z-index: 35;
+    }
+  </style>
+</head>
+<body class="text-slate-100 select-none">
+
+  <!-- Video Stream untuk Mode Kamera AR -->
+  <video id="ar-video" autoplay playsinline muted></video>
+
+  <!-- Container Utama 3D Canvas -->
+  <div id="canvas-container"></div>
+
+  <!-- Layer Pin Label 2D Proyeksi dari 3D -->
+  <div id="pins-layer" class="fixed inset-0 pointer-events-none z-20 overflow-hidden"></div>
+
+  <!-- HEADER BAR ATAS -->
+  <header class="fixed top-0 left-0 right-0 z-30 p-3 sm:p-4 pointer-events-none">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
+      <!-- Identitas Kampus + Logo Resmi Kemenkes Poltekkes Palangka Raya -->
+      <div class="pointer-events-auto flex items-center gap-3 bg-slate-900/90 backdrop-blur-md border border-slate-700/70 px-3.5 py-2 rounded-2xl shadow-xl">
+        <!-- Logo Horizontal Kemenkes Poltekkes Palangka Raya -->
+        <div class="bg-white px-2.5 py-1.5 rounded-xl flex items-center justify-center shadow-md shrink-0 border border-teal-500/40">
+          <svg viewBox="0 0 430 96" class="h-8 sm:h-9 w-auto" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Logo Kemenkes Poltekkes Palangka Raya">
+            <!-- Simbol Kiri: Kapsul Toska Vertikal & Horizontal Kiri -->
+            <rect x="33" y="4" width="26" height="88" rx="13" fill="#00B4A6"/>
+            <rect x="4" y="35" width="42" height="26" rx="13" fill="#00B4A6"/>
+            <!-- Dua Kelopak Hijau Limau Kanan Atas & Kanan Bawah -->
+            <path d="M 62 45.5 L 62 24 C 62 15.7 68.7 9 77 9 C 85.3 9 92 15.7 92 24 L 92 32.5 C 92 39.7 86.2 45.5 79 45.5 Z" fill="#B4D334"/>
+            <path d="M 62 50.5 L 79 50.5 C 86.2 50.5 92 56.3 92 63.5 L 92 72 C 92 80.3 85.3 87 77 87 C 68.7 87 62 80.3 62 72 Z" fill="#B4D334"/>
+            <!-- Pemisah Silang Putih Bersih -->
+            <rect x="31" y="46.2" width="63" height="3.6" fill="#FFFFFF"/>
+            <rect x="57.2" y="8" width="3.6" height="80" fill="#FFFFFF"/>
+            <!-- Teks Kanan: Kemenkes & Poltekkes Palangka Raya -->
+            <text x="108" y="47" font-family="Inter, Arial, sans-serif" font-weight="800" font-size="37" fill="#00A9B5" letter-spacing="-0.5">Kemenkes</text>
+            <text x="109" y="80" font-family="Inter, Arial, sans-serif" font-weight="600" font-size="23.5" fill="#2BB673" letter-spacing="-0.2">Poltekkes Palangka Raya</text>
+          </svg>
+        </div>
+        <div class="hidden md:block h-8 w-px bg-slate-700/80"></div>
+        <div>
+          <h1 class="text-xs sm:text-sm font-extrabold tracking-tight text-white">MAKET BANGUNAN KAMPUS A</h1>
+          <p class="text-[11px] text-teal-300 font-semibold mt-0.5">Poltekkes Kemenkes Palangka Raya • Skala 1:200</p>
+        </div>
+      </div>
+
+      <!-- Tombol Aksi Kamera AR & QR Code -->
+      <div class="pointer-events-auto flex items-center gap-2">
+        <button id="btn-toggle-ar" onclick="toggleARMode()"
+          class="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-slate-900/85 hover:bg-slate-800 backdrop-blur-md border border-slate-700/80 text-xs font-semibold text-white shadow-lg transition active:scale-95">
+          <svg class="w-4 h-4 text-teal-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+          </svg>
+          <span id="ar-btn-text">Mode Kamera AR</span>
+        </button>
+
+        <button onclick="openQRModal()"
+          class="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-xs font-semibold text-white shadow-lg shadow-teal-950/50 transition active:scale-95">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/>
+          </svg>
+          <span>QR Code AR</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- KONTROL KAMERA & TAMPILAN -->
+    <div class="max-w-7xl mx-auto mt-2.5 flex flex-wrap items-center gap-1.5 pointer-events-auto">
+      <button onclick="setCameraPreset('iso')" class="px-2.5 py-1.5 rounded-lg bg-slate-900/80 hover:bg-slate-800 border border-slate-700/70 text-[11px] font-medium text-slate-200 backdrop-blur-md transition">
+        Isometrik
+      </button>
+      <button onclick="setCameraPreset('top')" class="px-2.5 py-1.5 rounded-lg bg-slate-900/80 hover:bg-slate-800 border border-slate-700/70 text-[11px] font-medium text-slate-200 backdrop-blur-md transition">
+        Tampak Atas
+      </button>
+      <button onclick="setCameraPreset('front')" class="px-2.5 py-1.5 rounded-lg bg-slate-900/80 hover:bg-slate-800 border border-slate-700/70 text-[11px] font-medium text-slate-200 backdrop-blur-md transition">
+        Gerbang Depan
+      </button>
+      <button onclick="toggleAutoRotate()" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900/80 hover:bg-slate-800 border border-slate-700/70 text-[11px] font-medium text-slate-200 backdrop-blur-md transition">
+        <span id="rotate-dot" class="w-2 h-2 rounded-full bg-slate-500"></span>
+        <span>Putar 360°</span>
+      </button>
+      <button onclick="toggleLabels()" class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-900/80 hover:bg-slate-800 border border-slate-700/70 text-[11px] font-medium text-slate-200 backdrop-blur-md transition">
+        <span id="label-dot" class="w-2 h-2 rounded-full bg-emerald-400"></span>
+        <span>Pin A–L</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- KARTU INFORMASI DETAIL GEDUNG (Scrollable & Responsif di Mobile/Desktop) -->
+  <div id="info-card" style="touch-action: pan-y;" class="fixed right-3 sm:right-4 top-28 sm:top-24 z-30 w-[calc(100vw-1.5rem)] max-w-xs sm:max-w-sm max-h-[48vh] sm:max-h-[62vh] overflow-y-auto bg-slate-900/95 backdrop-blur-xl border border-teal-500/40 rounded-2xl p-4 shadow-2xl transition-all duration-300 translate-x-[130%] opacity-0 pointer-events-auto">
+    <div class="flex items-start justify-between gap-2">
+      <div class="flex items-center gap-2.5">
+        <span id="card-code" class="w-9 h-9 rounded-xl bg-rose-600 text-white font-extrabold text-base flex items-center justify-center shadow-md shrink-0">A</span>
+        <div>
+          <span id="card-category" class="text-[10px] uppercase tracking-wider font-bold text-teal-400">Pusat Administrasi</span>
+          <h2 id="card-title" class="text-sm sm:text-base font-bold text-white leading-snug">Gedung Direktorat</h2>
+        </div>
+      </div>
+      <button onclick="closeInfoCard()" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition shrink-0">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+    </div>
+    <p id="card-desc" class="mt-3 text-xs text-slate-300 leading-relaxed">
+      Deskripsi bangunan kampus.
+    </p>
+    <div class="mt-3 pt-3 border-t border-slate-800 grid grid-cols-2 gap-2 text-[11px]">
+      <div class="bg-slate-800/70 rounded-xl p-2">
+        <span class="text-slate-400 block">Struktur</span>
+        <span id="card-floors" class="font-semibold text-slate-100">2 Lantai</span>
+      </div>
+      <div class="bg-slate-800/70 rounded-xl p-2">
+        <span class="text-slate-400 block">Zona Lokasi</span>
+        <span id="card-zone" class="font-semibold text-slate-100">Tengah Depan</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- PANEL KONTROL KAMERA MENGAMBANG (ZOOM IN, ZOOM OUT & RESET VIEW) -->
+  <div id="floating-camera-controls" class="fixed right-3 sm:right-4 bottom-24 sm:bottom-28 z-30 flex flex-col items-end gap-2 pointer-events-auto">
+    <div class="bg-slate-900/90 backdrop-blur-md border border-slate-700/80 rounded-2xl p-1.5 shadow-2xl flex flex-col gap-1.5">
+      <!-- Tombol Zoom In (+) -->
+      <button type="button" onclick="zoomCamera(0.75)" title="Perbesar (Zoom In)" aria-label="Zoom In"
+        class="w-10 h-10 rounded-xl bg-slate-800/90 hover:bg-teal-600/40 border border-slate-700 hover:border-teal-400 text-slate-100 flex items-center justify-center shadow transition active:scale-90">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14M5 12h14"/>
+        </svg>
+      </button>
+
+      <!-- Tombol Zoom Out (-) -->
+      <button type="button" onclick="zoomCamera(1.33)" title="Perkecil (Zoom Out)" aria-label="Zoom Out"
+        class="w-10 h-10 rounded-xl bg-slate-800/90 hover:bg-teal-600/40 border border-slate-700 hover:border-teal-400 text-slate-100 flex items-center justify-center shadow transition active:scale-90">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14"/>
+        </svg>
+      </button>
+
+      <div class="h-px bg-slate-700/80 mx-1"></div>
+
+      <!-- Tombol Reset View -->
+      <button type="button" onclick="resetCameraView()" title="Reset Tampilan Awal" aria-label="Reset View"
+        class="px-2.5 py-2 rounded-xl bg-slate-800/90 hover:bg-rose-600/30 border border-slate-700 hover:border-rose-400 text-slate-100 flex flex-col items-center justify-center gap-0.5 shadow transition active:scale-90">
+        <svg class="w-4 h-4 text-teal-400" fill="none" stroke="currentColor" stroke-width="2.3" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+        </svg>
+        <span class="text-[10px] font-bold tracking-tight">Reset</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- BOTTOM BAR: NAVIGASI CEPAT GEDUNG A - L (Dapat digeser horizontal dengan sentuhan/drag mouse) -->
+  <footer id="bottom-ui-bar" class="fixed bottom-0 left-0 right-0 z-40 p-2.5 sm:p-4 pointer-events-none">
+    <div class="max-w-5xl mx-auto pointer-events-auto bg-slate-900/95 backdrop-blur-md border border-slate-700/80 rounded-2xl p-2.5 shadow-2xl">
+      <div class="flex items-center justify-between px-1.5 mb-2 gap-2">
+        <span class="text-[11px] font-semibold text-slate-200 flex items-center gap-1.5 truncate">
+          <span class="w-2 h-2 rounded-full bg-rose-500 animate-pulse shrink-0"></span>
+          <span>Geser & Pilih Bangunan (A–L):</span>
+        </span>
+        <div class="flex items-center gap-1 shrink-0">
+          <button type="button" onclick="scrollBuildingBar(-220)" aria-label="Geser Kiri"
+            class="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600/70 text-slate-200 active:scale-90 transition">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+            </svg>
+          </button>
+          <button type="button" onclick="scrollBuildingBar(220)" aria-label="Geser Kanan"
+            class="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600/70 text-slate-200 active:scale-90 transition">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+      <div id="building-buttons" class="w-full flex flex-nowrap items-center gap-2 overflow-x-auto no-scrollbar pb-1">
+        <!-- Tombol A-L akan di-generate lewat JS -->
+      </div>
+    </div>
+  </footer>
+
+  <!-- MODAL QR CODE & PANDUAN WEBAR -->
+  <div id="qr-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-3xl max-w-md w-full p-6 shadow-2xl relative animate-fade-in">
+      <button onclick="closeQRModal()" class="absolute top-4 right-4 p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+      </button>
+
+      <div class="text-center">
+        <span class="inline-block px-3 py-1 rounded-full bg-teal-500/15 text-teal-400 text-xs font-semibold mb-2">
+          Stiker Display Maket Fisik
+        </span>
+        <h3 class="text-lg font-bold text-white">QR Code 3D & WebAR Kampus A</h3>
+        <p class="text-xs text-slate-400 mt-1">
+          Cetak QR Code ini dan tempelkan di kaca/bingkai maket Poltekkes Kemenkes Palangka Raya agar pengunjung dapat memindai langsung.
+        </p>
+
+        <!-- Container QR Code dengan Header Logo Kemenkes Poltekkes Palangka Raya -->
+        <div class="mt-4 mb-4 flex flex-col items-center justify-center">
+          <div class="bg-white p-4 rounded-2xl shadow-lg border-4 border-teal-500/40 w-64">
+            <!-- Header Logo Resmi pada Preview Stiker -->
+            <div class="flex items-center justify-center pb-2.5 mb-2.5 border-b border-slate-200">
+              <svg viewBox="0 0 430 96" class="h-9 w-auto" xmlns="http://www.w3.org/2000/svg">
+                <rect x="33" y="4" width="26" height="88" rx="13" fill="#00B4A6"/>
+                <rect x="4" y="35" width="42" height="26" rx="13" fill="#00B4A6"/>
+                <path d="M 62 45.5 L 62 24 C 62 15.7 68.7 9 77 9 C 85.3 9 92 15.7 92 24 L 92 32.5 C 92 39.7 86.2 45.5 79 45.5 Z" fill="#B4D334"/>
+                <path d="M 62 50.5 L 79 50.5 C 86.2 50.5 92 56.3 92 63.5 L 92 72 C 92 80.3 85.3 87 77 87 C 68.7 87 62 80.3 62 72 Z" fill="#B4D334"/>
+                <rect x="31" y="46.2" width="63" height="3.6" fill="#FFFFFF"/>
+                <rect x="57.2" y="8" width="3.6" height="80" fill="#FFFFFF"/>
+                <text x="108" y="47" font-family="Inter, Arial, sans-serif" font-weight="800" font-size="37" fill="#00A9B5" letter-spacing="-0.5">Kemenkes</text>
+                <text x="109" y="80" font-family="Inter, Arial, sans-serif" font-weight="600" font-size="23.5" fill="#2BB673" letter-spacing="-0.2">Poltekkes Palangka Raya</text>
+              </svg>
+            </div>
+            <div id="qrcode-canvas" class="flex justify-center"></div>
+            <div class="mt-2.5 pt-1.5 border-t border-slate-200 text-center">
+              <p class="text-[10px] font-extrabold text-slate-900 tracking-wide">SCAN 3D AR MAKET</p>
+              <p class="text-[9px] font-semibold text-teal-700">KAMPUS A • SKALA 1:200</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Input Custom URL jika dihosting di domain kampus -->
+        <div class="text-left mb-4">
+          <label class="block text-[11px] font-medium text-slate-300 mb-1">Tautan WebAR (Otomatis / Custom Domain Kampus):</label>
+          <div class="flex gap-2">
+            <input id="qr-url-input" type="text"
+              class="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-teal-500"
+              placeholder="https://ar.poltekkespalangkaraya.ac.id/kampus-a" />
+            <button onclick="regenerateQR()" class="px-3 py-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-xs font-semibold text-white transition">
+              Update
+            </button>
+          </div>
+        </div>
+
+        <div class="flex gap-2.5">
+          <button onclick="downloadQRSticker()" class="flex-1 py-2.5 px-4 rounded-xl bg-teal-600 hover:bg-teal-500 text-xs font-bold text-white shadow-lg transition flex items-center justify-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+            </svg>
+            Unduh Gambar QR
+          </button>
+          <button onclick="closeQRModal(); toggleARMode();" class="flex-1 py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-xs font-bold text-white transition">
+            Uji Kamera AR
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- NOTIFIKASI TOAST (Pengganti alert) -->
+  <div id="toast-msg" class="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-slate-900/95 border border-teal-500/50 text-white text-xs font-medium px-4 py-2.5 rounded-xl shadow-2xl opacity-0 pointer-events-none transition-opacity duration-300">
+    Pesan notifikasi
+  </div>
+
+  <script>
+    // =========================================================================
+    // 1. DATA MASTER BANGUNAN & FASILITAS KAMPUS A (KODE A - L)
+    // =========================================================================
+    const BUILDINGS_DATA = [
+      {
+        code: 'A',
+        name: 'Gedung Direktorat',
+        category: 'Pusat Administrasi',
+        floors: '2 Lantai + Portiko Utama',
+        zone: 'Tengah Depan (Jl. G. Obos)',
+        desc: 'Gedung utama pusat pimpinan, administrasi umum, keuangan, dan layanan manajemen Poltekkes Kemenkes Palangka Raya. Menghadap langsung ke bundaran tiang bendera dan gerbang utama.',
+        pos: { x: 0, y: 0, z: 3.5 },
+        pinHeight: 6.2,
+        color: '#e11d48'
+      },
+      {
+        code: 'B',
+        name: 'Gedung Kuliah Kebidanan',
+        category: 'Gedung Akademik',
+        floors: '2 Lantai (Denah Courtyard)',
+        zone: 'Sayap Kanan Depan',
+        desc: 'Fasilitas ruang perkuliahan, laboratorium keterampilan klinik kebidanan, serta ruang dosen Jurusan Kebidanan dengan taman terbuka di bagian tengah gedung.',
+        pos: { x: 11.5, y: 0, z: 6.5 },
+        pinHeight: 5.5,
+        color: '#e11d48'
+      },
+      {
+        code: 'C',
+        name: 'Gedung Kuliah Keperawatan',
+        category: 'Gedung Akademik',
+        floors: '2 Lantai (Denah Courtyard)',
+        zone: 'Sayap Kiri Depan',
+        desc: 'Fasilitas ruang kelas, laboratorium keperawatan terpadu, dan ruang administrasi Jurusan Keperawatan yang simetris dengan Gedung Kebidanan.',
+        pos: { x: -11.5, y: 0, z: 6.5 },
+        pinHeight: 5.5,
+        color: '#e11d48'
+      },
+      {
+        code: 'D',
+        name: 'Gedung Center Unit Kearsipan',
+        category: 'Unit Penunjang',
+        floors: '1–2 Lantai',
+        zone: 'Belakang Gedung B / Kanan A',
+        desc: 'Pusat penyimpanan arsip institusi, tata persuratan, dan dokumentasi akademik Poltekkes Kemenkes Palangka Raya.',
+        pos: { x: 11.5, y: 0, z: -2.8 },
+        pinHeight: 4.5,
+        color: '#e11d48'
+      },
+      {
+        code: 'E',
+        name: 'Gedung Layanan Pendidikan & Kuliah Terpadu',
+        category: 'Gedung Perkuliahan Utama',
+        floors: '4 Lantai + Roof Garden',
+        zone: 'Tengah Belakang (Jl. Sam Ratulangi)',
+        desc: 'Gedung bertingkat terbesar di Kampus A yang menampung ruang kuliah bersama, laboratorium terpadu, ruang CBT, perpustakaan, serta layanan akademik mahasiswa.',
+        pos: { x: -1.5, y: 0, z: -11.5 },
+        pinHeight: 7.8,
+        color: '#e11d48'
+      },
+      {
+        code: 'F',
+        name: 'Gedung Auditorium',
+        category: 'Fasilitas Umum & Serbaguna',
+        floors: '2 Lantai (Aula Utama)',
+        zone: 'Sudut Kiri Belakang (Jl. Kyai Maja)',
+        desc: 'Gedung pertemuan berkapasitas besar untuk pelaksanaan wisuda, angkat sumpah profesi kesehatan, seminar nasional, dan kegiatan kemahasiswaan.',
+        pos: { x: -18.5, y: 0, z: -11.0 },
+        pinHeight: 6.0,
+        color: '#e11d48'
+      },
+      {
+        code: 'G',
+        name: 'Kopkar dan Garase Kendaraan',
+        category: 'Sarana Operasional',
+        floors: '1 Lantai',
+        zone: 'Sisi Kanan Tengah',
+        desc: 'Koperasi karyawan (Kopkar) dan garasi kendaraan dinas operasional maupun bus kampus Poltekkes Kemenkes Palangka Raya.',
+        pos: { x: 20.5, y: 0, z: 0.5 },
+        pinHeight: 4.2,
+        color: '#e11d48'
+      },
+      {
+        code: 'H',
+        name: 'Gedung Asrama dan Pusat Bisnis',
+        category: 'Hunian & Pengembangan Bisnis',
+        floors: '3–4 Lantai (Bentuk Menyudut)',
+        zone: 'Sudut Kanan Belakang',
+        desc: 'Asrama terpadu bagi mahasiswa serta unit pengembangan bisnis dan kewirausahaan kampus.',
+        pos: { x: 18.0, y: 0, z: -10.5 },
+        pinHeight: 6.8,
+        color: '#e11d48'
+      },
+      {
+        code: 'I',
+        name: 'Mini Soccer',
+        category: 'Fasilitas Olahraga',
+        floors: 'Lapangan Rumput Sintetis + Pagar',
+        zone: 'Sudut Kiri Depan',
+        desc: 'Sarana olahraga lapangan mini soccer standar lengkap dengan jaring pengaman tinggi di sekeliling lapangan untuk aktivitas mahasiswa dan pegawai.',
+        pos: { x: -21.5, y: 0, z: 8.5 },
+        pinHeight: 4.0,
+        color: '#e11d48'
+      },
+      {
+        code: 'J',
+        name: 'Food Court',
+        category: 'Kantin & Area Istirahat',
+        floors: '1 Lantai Memanjang',
+        zone: 'Kanan Gedung Kebidanan (B)',
+        desc: 'Area kantin sehat dan pujasera yang menyediakan beragam pilihan makanan dan minuman higienis bagi civitas akademika.',
+        pos: { x: 18.2, y: 0, z: 8.0 },
+        pinHeight: 3.8,
+        color: '#e11d48'
+      },
+      {
+        code: 'K',
+        name: 'Ruang Istirahat dan Ganti',
+        category: 'Penunjang Olahraga',
+        floors: '1 Lantai',
+        zone: 'Pojok Kiri Depan (Bawah Mini Soccer)',
+        desc: 'Fasilitas ruang ganti pakaian, loker, dan ruang istirahat atlet/pemain di area lapangan Mini Soccer.',
+        pos: { x: -21.5, y: 0, z: 15.8 },
+        pinHeight: 3.4,
+        color: '#e11d48'
+      },
+      {
+        code: 'L',
+        name: 'Ruang Genset',
+        category: 'Utilitas & Kelistrikan',
+        floors: '1 Lantai',
+        zone: 'Sisi Kanan Bawah Gedung G',
+        desc: 'Ruang panel kelistrikan utama dan mesin generator set (genset) cadangan untuk menjamin pasokan daya seluruh gedung Kampus A.',
+        pos: { x: 23.6, y: 0, z: 3.2 },
+        pinHeight: 3.4,
+        color: '#e11d48'
+      }
+    ];
+
+    // =========================================================================
+    // 2. INISIALISASI SCENE, KAMERA, RENDERER & CONTROLS THREE.JS
+    // =========================================================================
+    let scene, camera, renderer, controls;
+    let maketGroup;
+    let buildingMeshes = {}; // Menyimpan group/mesh per kode A-L untuk highlight
+    let pinElements = {};    // Menyimpan elemen DOM label A-L
+    let selectedCode = null;
+    let showLabels = true;
+    let isARMode = false;
+    let arStream = null;
+    let flagMesh = null;
+
+    // Variabel animasi kamera halus
+    let cameraTargetPos = null;
+    let controlsTargetPos = null;
+
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+
+    function initThree() {
+      const container = document.getElementById('canvas-container');
+
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0f172a);
+      scene.fog = new THREE.FogExp2(0x0f172a, 0.0045);
+
+      camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 500);
+      camera.position.set(0, 26, 28);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      renderer.outputEncoding = THREE.sRGBEncoding;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.1;
+      container.appendChild(renderer.domElement);
+
+      // Pastikan OrbitControls terikat eksklusif pada renderer.domElement (<canvas>)
+      // sehingga sentuhan & geser pada UI overlay bawah tidak dibajak oleh OrbitControls
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.06;
+      controls.maxPolarAngle = Math.PI / 2 - 0.04; // Mencegah kamera tembus ke bawah tanah
+      controls.minDistance = 12;
+      controls.maxDistance = 110;
+      controls.target.set(0, 0, 0);
+
+      setupLighting();
+      buildMaketKampusA();
+      setupUIButtons();
+      setupPinLabels();
+      setupInteractionEvents();
+    }
+
+    // =========================================================================
+    // 3. PENCAHAYAAN SIANG HARI & BAYANGAN REALISTIS
+    // =========================================================================
+    function setupLighting() {
+      const hemiLight = new THREE.HemisphereLight(0xf8fafc, 0x334155, 0.75);
+      hemiLight.position.set(0, 50, 0);
+      scene.add(hemiLight);
+
+      const dirLight = new THREE.DirectionalLight(0xfffbeb, 1.15);
+      dirLight.position.set(28, 46, 32);
+      dirLight.castShadow = true;
+      dirLight.shadow.mapSize.width = 2048;
+      dirLight.shadow.mapSize.height = 2048;
+      dirLight.shadow.camera.near = 10;
+      dirLight.shadow.camera.far = 140;
+      const d = 38;
+      dirLight.shadow.camera.left = -d;
+      dirLight.shadow.camera.right = d;
+      dirLight.shadow.camera.top = d;
+      dirLight.shadow.camera.bottom = -d;
+      dirLight.shadow.bias = -0.0005;
+      scene.add(dirLight);
+
+      // Fill light lembut dari sisi berlawanan
+      const fillLight = new THREE.DirectionalLight(0xbae6fd, 0.35);
+      fillLight.position.set(-30, 20, -25);
+      scene.add(fillLight);
+    }
+
+    // =========================================================================
+    // 4. HELPER TEKSTUR KANVAS (JENDELA, JALAN, TEKS MASJID AL HUSNA, DLL)
+    // =========================================================================
+    function createWindowTexture(cols, rows, wallHex = '#f5f0e6', winHex = '#2c3e50') {
+      const canvas = document.createElement('canvas');
+      canvas.width = 256;
+      canvas.height = 256;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = wallHex;
+      ctx.fillRect(0, 0, 256, 256);
+
+      // Garis pembatas lantai
+      ctx.fillStyle = '#d6cfc2';
+      const rowH = 256 / rows;
+      for (let r = 1; r < rows; r++) {
+        ctx.fillRect(0, r * rowH - 3, 256, 6);
+      }
+
+      // Kisi jendela
+      const colW = 256 / cols;
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const padX = colW * 0.22;
+          const padY = rowH * 0.22;
+          ctx.fillStyle = winHex;
+          ctx.fillRect(c * colW + padX, r * rowH + padY, colW - padX * 2, rowH - padY * 2);
+
+          // Kilau kaca
+          ctx.fillStyle = 'rgba(186, 230, 253, 0.35)';
+          ctx.fillRect(c * colW + padX + 2, r * rowH + padY + 2, (colW - padX * 2) * 0.4, rowH - padY * 2 - 4);
+        }
+      }
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.wrapS = THREE.RepeatWrapping;
+      tex.wrapT = THREE.RepeatWrapping;
+      return tex;
+    }
+
+    function createTextPlaneTexture(textLines, bgColor, textColor, fontSize = 44, borderColor = null) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 256;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = bgColor;
+      ctx.fillRect(0, 0, 512, 256);
+
+      if (borderColor) {
+        ctx.strokeStyle = borderColor;
+        ctx.lineWidth = 10;
+        ctx.strokeRect(8, 8, 496, 240);
+      }
+
+      ctx.fillStyle = textColor;
+      ctx.font = `bold ${fontSize}px Inter, Arial, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+
+      const lineHeight = fontSize * 1.25;
+      const startY = 128 - ((textLines.length - 1) * lineHeight) / 2;
+      textLines.forEach((line, idx) => {
+        ctx.fillText(line, 256, startY + idx * lineHeight);
+      });
+
+      return new THREE.CanvasTexture(canvas);
+    }
+
+    function createSoccerFieldTexture() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 256;
+      canvas.height = 512;
+      const ctx = canvas.getContext('2d');
+
+      // Rumput belang-belang
+      for (let i = 0; i < 10; i++) {
+        ctx.fillStyle = i % 2 === 0 ? '#2e7d32' : '#388e3c';
+        ctx.fillRect(0, i * 51.2, 256, 51.2);
+      }
+
+      // Garis putih lapangan
+      ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+      ctx.lineWidth = 5;
+      ctx.strokeRect(16, 16, 224, 480);
+
+      // Garis tengah & lingkaran tengah
+      ctx.beginPath();
+      ctx.moveTo(16, 256);
+      ctx.lineTo(240, 256);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(128, 256, 38, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Kotak penalti atas & bawah
+      ctx.strokeRect(64, 16, 128, 65);
+      ctx.strokeRect(64, 431, 128, 65);
+
+      return new THREE.CanvasTexture(canvas);
+    }
+
+    // =========================================================================
+    // 5. PEMBANGUNAN MODEL 3D MAKET KAMPUS A (PROPORSIONAL SESUAI FOTO)
+    // =========================================================================
+    function buildMaketKampusA() {
+      maketGroup = new THREE.Group();
+      scene.add(maketGroup);
+
+      // Material umum
+      const matRoofMaroon = new THREE.MeshStandardMaterial({ color: 0x7c2329, roughness: 0.65, metalness: 0.05 });
+      const matRoofTrim = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.5 });
+      const matWallCream = new THREE.MeshStandardMaterial({ color: 0xf4efe6, roughness: 0.7 });
+      const matAsphalt = new THREE.MeshStandardMaterial({ color: 0x9ca3af, roughness: 0.85 });
+      const matRoadDark = new THREE.MeshStandardMaterial({ color: 0x26292e, roughness: 0.9 });
+      const matGrass = new THREE.MeshStandardMaterial({ color: 0x4d7c2a, roughness: 0.9 });
+      const matBaseWood = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.6 });
+
+      // --- A. ALAS MEJA MAKET & JALAN KELILING ---
+      const baseBoard = new THREE.Mesh(new THREE.BoxGeometry(66, 1.2, 48), matBaseWood);
+      baseBoard.position.y = -0.65;
+      baseBoard.receiveShadow = true;
+      maketGroup.add(baseBoard);
+
+      // Hamparan rumput luar pagar
+      const outerGrass = new THREE.Mesh(new THREE.BoxGeometry(64, 0.15, 46), matGrass);
+      outerGrass.position.y = 0.02;
+      outerGrass.receiveShadow = true;
+      maketGroup.add(outerGrass);
+
+      // Jalan Raya Keliling (Jl. G. Obos, Jl. Sam Ratulangi, Jl. Kyai Maja, Jl. Sultan Hasanuddin)
+      const roadFront = new THREE.Mesh(new THREE.BoxGeometry(64, 0.18, 3.2), matRoadDark); // Jl. G. Obos
+      roadFront.position.set(0, 0.04, 20.6);
+      roadFront.receiveShadow = true;
+      maketGroup.add(roadFront);
+
+      const roadBack = new THREE.Mesh(new THREE.BoxGeometry(64, 0.18, 2.4), matRoadDark); // Jl. Sam Ratulangi
+      roadBack.position.set(0, 0.04, -19.5);
+      roadBack.receiveShadow = true;
+      maketGroup.add(roadBack);
+
+      const roadLeft = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.18, 42), matRoadDark); // Jl. Kyai Maja
+      roadLeft.position.set(-28.5, 0.04, 0.5);
+      roadLeft.receiveShadow = true;
+      maketGroup.add(roadLeft);
+
+      const roadRight = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.18, 42), matRoadDark); // Jl. Sultan Hasanuddin
+      roadRight.position.set(28.5, 0.04, 0.5);
+      roadRight.receiveShadow = true;
+      maketGroup.add(roadRight);
+
+      // Plang Nama Jalan Biru (Persis seperti pada maket fisik)
+      addRoadSign('Jalan G. Obos', 0, 0.16, 20.6, 0, 7.5, 1.1);
+      addRoadSign('Jalan Sam Ratulangi', -3, 0.16, -19.5, 0, 8.2, 0.95);
+      addRoadSign('Jalan Kyai Maja', -28.5, 0.16, 1.5, Math.PI / 2, 7.2, 0.95);
+      addRoadSign('Jalan Sultan Hasanuddin', 28.5, 0.16, 7.5, Math.PI / 2, 9.5, 1.0);
+
+      // --- B. PELATARAN DALAM KAMPUS & TAMAN ---
+      const campusPaving = new THREE.Mesh(new THREE.BoxGeometry(52.5, 0.22, 34.5), matAsphalt);
+      campusPaving.position.set(0, 0.08, 0.6);
+      campusPaving.receiveShadow = true;
+      maketGroup.add(campusPaving);
+
+      // Jalur Hijau Tepi Pagar Depan & Pagar Keliling
+      const frontLawnLeft = new THREE.Mesh(new THREE.BoxGeometry(14, 0.26, 2.2), matGrass);
+      frontLawnLeft.position.set(-10.5, 0.1, 16.5);
+      frontLawnLeft.receiveShadow = true;
+      maketGroup.add(frontLawnLeft);
+
+      const frontLawnRight = new THREE.Mesh(new THREE.BoxGeometry(14, 0.26, 2.2), matGrass);
+      frontLawnRight.position.set(10.5, 0.1, 16.5);
+      frontLawnRight.receiveShadow = true;
+      maketGroup.add(frontLawnRight);
+
+      // Pagar keliling putih rendah dengan pilar gerbang utama (kiri & kanan depan)
+      createPerimeterFence();
+
+      // Bundaran Taman & Tiang Bendera di Depan Gedung A
+      const roundaboutGrass = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 3.6, 0.28, 32), matGrass);
+      roundaboutGrass.position.set(0, 0.12, 9.2);
+      roundaboutGrass.receiveShadow = true;
+      maketGroup.add(roundaboutGrass);
+
+      const flagpole = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.06, 0.09, 5.2, 12),
+        new THREE.MeshStandardMaterial({ color: 0xe2e8f0, metalness: 0.7, roughness: 0.2 })
+      );
+      flagpole.position.set(0, 2.7, 9.8);
+      flagpole.castShadow = true;
+      maketGroup.add(flagpole);
+
+      // Bendera Merah Putih
+      const flagCanvas = document.createElement('canvas');
+      flagCanvas.width = 128; flagCanvas.height = 64;
+      const fctx = flagCanvas.getContext('2d');
+      fctx.fillStyle = '#dc2626'; fctx.fillRect(0, 0, 128, 32);
+      fctx.fillStyle = '#ffffff'; fctx.fillRect(0, 32, 128, 32);
+      const flagTex = new THREE.CanvasTexture(flagCanvas);
+      flagMesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(1.1, 0.65, 8, 4),
+        new THREE.MeshStandardMaterial({ map: flagTex, side: THREE.DoubleSide })
+      );
+      flagMesh.position.set(0.55, 4.9, 9.8);
+      maketGroup.add(flagMesh);
+
+      // --- C. KENDARAAN MINIATUR DI HALAMAN DEPAN (Bus Kuning & Mobil Putih) ---
+      addMiniVehicle(0xfacc15, 4.2, 0.2, 13.8, 2.4, 0.85, 0.8); // Bus kuning depan Gedung B
+      addMiniVehicle(0xf8fafc, -2.6, 0.2, 14.8, 0.75, 0.55, 1.35); // Mobil putih menghadap gerbang
+
+      // --- D. KAWASAN MASJID AL HUSNA (Sisi Kanan Depan) ---
+      const masjidTex = createTextPlaneTexture(
+        ['KAWASAN', 'MASJID', 'AL HUSNA'],
+        '#dbe3eb',
+        '#3b6e9c',
+        46,
+        '#94a3b8'
+      );
+      const masjidZone = new THREE.Mesh(
+        new THREE.BoxGeometry(7.2, 0.26, 11.2),
+        new THREE.MeshStandardMaterial({ map: masjidTex, roughness: 0.8 })
+      );
+      masjidZone.position.set(22.2, 0.11, 10.6);
+      masjidZone.receiveShadow = true;
+      maketGroup.add(masjidZone);
+
+      // =====================================================================
+      // PEMODELAN 12 BANGUNAN & FASILITAS UTAMA (A - L)
+      // =====================================================================
+
+      // 1. GEDUNG A: GEDUNG DIREKTORAT (Tengah Depan)
+      const groupA = new THREE.Group();
+      groupA.position.set(0, 0.2, 3.5);
+      const texWallA = createWindowTexture(6, 2);
+
+      // Sayap utama direktorat
+      const bodyA = new THREE.Mesh(new THREE.BoxGeometry(7.6, 2.7, 5.2), [texWallA, texWallA, matWallCream, matWallCream, texWallA, texWallA].map(m => m.isTexture ? new THREE.MeshStandardMaterial({ map: m }) : m));
+      bodyA.position.y = 1.35;
+      bodyA.castShadow = true; bodyA.receiveShadow = true;
+      groupA.add(bodyA);
+
+      // Bagian belakang direktorat bertingkat
+      const backA = new THREE.Mesh(new THREE.BoxGeometry(5.2, 3.3, 3.2), matWallCream);
+      backA.position.set(0, 1.65, -3.2);
+      backA.castShadow = true;
+      groupA.add(backA);
+
+      // Portiko / Teras Masuk Bertangga di Depan Gedung A
+      const porticoRoof = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.25, 2.2), matRoofTrim);
+      porticoRoof.position.set(0, 2.1, 3.3);
+      porticoRoof.castShadow = true;
+      groupA.add(porticoRoof);
+
+      [-1.3, 1.3].forEach(px => {
+        const pillar = new THREE.Mesh(new THREE.BoxGeometry(0.35, 2.1, 0.35), matWallCream);
+        pillar.position.set(px, 1.05, 4.1);
+        pillar.castShadow = true;
+        groupA.add(pillar);
+      });
+
+      // Tangga masuk depan
+      for (let s = 0; s < 4; s++) {
+        const step = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.16, 0.45), matRoofTrim);
+        step.position.set(0, 0.08 + s * 0.16, 4.9 - s * 0.35);
+        groupA.add(step);
+      }
+
+      // Atap Limasan Bertingkat Gedung A
+      addHipRoof(groupA, 8.2, 5.8, 1.6, 2.7, 0, matRoofMaroon);
+      addHipRoof(groupA, 5.8, 3.8, 1.3, 3.3, -3.2, matRoofMaroon);
+      registerBuilding('A', groupA);
+
+      // 2. GEDUNG B: GEDUNG KULIAH KEBIDANAN (Sayap Kanan Depan dengan Courtyard Tengah)
+      const groupB = createCourtyardBuilding(9.2, 11.2, 2.4, 2.3, 4.6, matRoofMaroon, matWallCream);
+      groupB.position.set(11.5, 0.2, 6.5);
+      registerBuilding('B', groupB);
+
+      // 3. GEDUNG C: GEDUNG KULIAH KEPERAWATAN (Sayap Kiri Depan dengan Courtyard Tengah)
+      const groupC = createCourtyardBuilding(9.2, 11.2, 2.4, 2.3, 4.6, matRoofMaroon, matWallCream);
+      groupC.position.set(-11.5, 0.2, 6.5);
+      registerBuilding('C', groupC);
+
+      // 4. GEDUNG D: GEDUNG CENTER UNIT KEARSIPAN
+      const groupD = new THREE.Group();
+      groupD.position.set(11.5, 0.2, -2.8);
+      const texWallD = createWindowTexture(5, 1);
+      const bodyD = new THREE.Mesh(new THREE.BoxGeometry(5.6, 1.9, 3.0), new THREE.MeshStandardMaterial({ map: texWallD }));
+      bodyD.position.y = 0.95;
+      bodyD.castShadow = true; bodyD.receiveShadow = true;
+      groupD.add(bodyD);
+      addHipRoof(groupD, 6.1, 3.5, 1.1, 1.9, 0, matRoofMaroon);
+      registerBuilding('D', groupD);
+
+      // 5. GEDUNG E: GEDUNG LAYANAN PENDIDIKAN & KULIAH TERPADU (4 Lantai Besar di Tengah Belakang)
+      const groupE = new THREE.Group();
+      groupE.position.set(-1.5, 0.2, -11.5);
+      const texWallE = createWindowTexture(16, 4, '#efe6d5', '#334155');
+      const bodyE = new THREE.Mesh(new THREE.BoxGeometry(17.5, 4.6, 5.8), new THREE.MeshStandardMaterial({ map: texWallE }));
+      bodyE.position.y = 2.3;
+      bodyE.castShadow = true; bodyE.receiveShadow = true;
+      groupE.add(bodyE);
+
+      // Kanopi / Balkon Hijau Lantai Atas (persis seperti foto maket)
+      const balconyStrip = new THREE.Mesh(new THREE.BoxGeometry(18.1, 0.28, 6.4), matRoofTrim);
+      balconyStrip.position.y = 3.75;
+      groupE.add(balconyStrip);
+
+      const greenPlanter = new THREE.Mesh(new THREE.BoxGeometry(17.8, 0.22, 6.1), matGrass);
+      greenPlanter.position.y = 3.95;
+      groupE.add(greenPlanter);
+
+      // Atap Merah Marun dengan Aksen Menara Putih Tengah
+      addHipRoof(groupE, 18.0, 6.2, 1.5, 4.6, 0, matRoofMaroon);
+      const centerCoreE = new THREE.Mesh(new THREE.BoxGeometry(2.4, 5.8, 6.5), matRoofTrim);
+      centerCoreE.position.y = 2.9;
+      centerCoreE.castShadow = true;
+      groupE.add(centerCoreE);
+      registerBuilding('E', groupE);
+
+      // 6. GEDUNG F: GEDUNG AUDITORIUM (Sudut Kiri Belakang)
+      const groupF = new THREE.Group();
+      groupF.position.set(-18.5, 0.2, -11.0);
+      const texWallF = createWindowTexture(6, 2);
+      const bodyF = new THREE.Mesh(new THREE.BoxGeometry(7.2, 3.2, 6.8), new THREE.MeshStandardMaterial({ map: texWallF }));
+      bodyF.position.y = 1.6;
+      bodyF.castShadow = true; bodyF.receiveShadow = true;
+      groupF.add(bodyF);
+
+      // Teras depan Auditorium menghadap selatan
+      const porchF = new THREE.Mesh(new THREE.BoxGeometry(4.4, 2.2, 1.6), matRoofTrim);
+      porchF.position.set(0, 1.1, 3.9);
+      porchF.castShadow = true;
+      groupF.add(porchF);
+
+      addHipRoof(groupF, 7.8, 7.4, 1.5, 3.2, 0, matRoofMaroon);
+      registerBuilding('F', groupF);
+
+      // 7. GEDUNG G: KOPKAR DAN GARASE KENDARAAN
+      const groupG = new THREE.Group();
+      groupG.position.set(20.5, 0.2, 0.5);
+      const bodyG = new THREE.Mesh(new THREE.BoxGeometry(5.2, 1.8, 4.4), matWallCream);
+      bodyG.position.y = 0.9;
+      bodyG.castShadow = true; bodyG.receiveShadow = true;
+      groupG.add(bodyG);
+      addHipRoof(groupG, 5.7, 4.9, 1.1, 1.8, 0, matRoofMaroon);
+      registerBuilding('G', groupG);
+
+      // 8. GEDUNG H: GEDUNG ASRAMA DAN PUSAT BISNIS (Sudut Kanan Belakang Menyudut)
+      const groupH = new THREE.Group();
+      groupH.position.set(18.0, 0.2, -10.5);
+      groupH.rotation.y = -Math.PI / 5.5; // Sudut serong sesuai maket
+      const texWallH = createWindowTexture(8, 3, '#f7dcc4', '#334155');
+      const bodyH = new THREE.Mesh(new THREE.BoxGeometry(8.6, 3.6, 5.2), new THREE.MeshStandardMaterial({ map: texWallH }));
+      bodyH.position.y = 1.8;
+      bodyH.castShadow = true; bodyH.receiveShadow = true;
+      groupH.add(bodyH);
+
+      // Sayap tangga belakang Gedung H
+      const wingH = new THREE.Mesh(new THREE.BoxGeometry(4.5, 3.9, 2.4), matWallCream);
+      wingH.position.set(0.5, 1.95, -2.5);
+      wingH.castShadow = true;
+      groupH.add(wingH);
+
+      addHipRoof(groupH, 9.1, 5.7, 1.4, 3.6, 0, matRoofMaroon);
+      registerBuilding('H', groupH);
+
+      // 9. FASILITAS I: MINI SOCCER (Sudut Kiri Depan)
+      const groupI = new THREE.Group();
+      groupI.position.set(-21.5, 0.2, 8.5);
+      const fieldTex = createSoccerFieldTexture();
+      const fieldMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(6.6, 0.18, 10.6),
+        new THREE.MeshStandardMaterial({ map: fieldTex, roughness: 0.85 })
+      );
+      fieldMesh.position.y = 0.09;
+      fieldMesh.receiveShadow = true;
+      groupI.add(fieldMesh);
+
+      // Pagar pembatas putih tinggi sekeliling Mini Soccer
+      const fenceMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, transparent: true, opacity: 0.65, side: THREE.DoubleSide });
+      const wallLongL = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.5, 10.6), fenceMat);
+      wallLongL.position.set(-3.3, 0.75, 0);
+      const wallLongR = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.5, 10.6), fenceMat);
+      wallLongR.position.set(3.3, 0.75, 0);
+      const wallShortT = new THREE.Mesh(new THREE.BoxGeometry(6.6, 1.5, 0.12), fenceMat);
+      wallShortT.position.set(0, 0.75, -5.3);
+      const wallShortB = new THREE.Mesh(new THREE.BoxGeometry(6.6, 1.5, 0.12), fenceMat);
+      wallShortB.position.set(0, 0.75, 5.3);
+      groupI.add(wallLongL, wallLongR, wallShortT, wallShortB);
+
+      // Gawang Mini Soccer Utara & Selatan
+      [-4.8, 4.8].forEach(gz => {
+        const goal = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.75, 0.5), matRoofTrim);
+        goal.position.set(0, 0.45, gz);
+        groupI.add(goal);
+      });
+      registerBuilding('I', groupI);
+
+      // 10. FASILITAS J: FOOD COURT (Memanjang Vertikal di Kanan Gedung B)
+      const groupJ = new THREE.Group();
+      groupJ.position.set(18.2, 0.2, 8.0);
+      const bodyJ = new THREE.Mesh(new THREE.BoxGeometry(2.1, 1.35, 8.8), matWallCream);
+      bodyJ.position.y = 0.675;
+      bodyJ.castShadow = true; bodyJ.receiveShadow = true;
+      groupJ.add(bodyJ);
+      const roofJ = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.25, 9.2), matRoofTrim);
+      roofJ.position.y = 1.45;
+      roofJ.castShadow = true;
+      groupJ.add(roofJ);
+      registerBuilding('J', groupJ);
+
+      // 11. FASILITAS K: RUANG ISTIRAHAT DAN GANTI (Pojok Kiri Depan)
+      const groupK = new THREE.Group();
+      groupK.position.set(-21.5, 0.2, 15.8);
+      const bodyK = new THREE.Mesh(new THREE.BoxGeometry(4.2, 1.3, 2.0), matWallCream);
+      bodyK.position.y = 0.65;
+      bodyK.castShadow = true; bodyK.receiveShadow = true;
+      groupK.add(bodyK);
+      addHipRoof(groupK, 4.6, 2.4, 0.85, 1.3, 0, matRoofMaroon);
+      registerBuilding('K', groupK);
+
+      // 12. FASILITAS L: RUANG GENSET (Sisi Kanan Bawah Gedung G)
+      const groupL = new THREE.Group();
+      groupL.position.set(23.6, 0.2, 3.2);
+      const bodyL = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.3, 2.0), new THREE.MeshStandardMaterial({ color: 0xcbd5e1, roughness: 0.6 }));
+      bodyL.position.y = 0.65;
+      bodyL.castShadow = true; bodyL.receiveShadow = true;
+      groupL.add(bodyL);
+      addHipRoof(groupL, 2.5, 2.3, 0.75, 1.3, 0, matRoofMaroon);
+      registerBuilding('L', groupL);
+
+      // --- E. PEPONOHAN HIJAU DI SELURUH AREA KAMPUS ---
+      populateCampusTrees();
+    }
+
+    // Helper: Membuat Atap Limasan / Perisai Realistis
+    function addHipRoof(parent, width, depth, height, baseY, offsetZ, material) {
+      const geo = new THREE.ConeGeometry(Math.SQRT1_2, height, 4);
+      geo.rotateY(Math.PI / 4);
+      const roof = new THREE.Mesh(geo, material);
+      roof.scale.set(width, 1, depth);
+      roof.position.set(0, baseY + height / 2, offsetZ);
+      roof.castShadow = true;
+      roof.receiveShadow = true;
+      parent.add(roof);
+    }
+
+    // Helper: Gedung Kampus dengan Courtyard Terbuka di Tengah (Gedung B & C)
+    function createCourtyardBuilding(outerW, outerD, height, innerW, innerD, roofMat, wallMat) {
+      const group = new THREE.Group();
+      const wingW = (outerW - innerW) / 2;
+      const wingD = (outerD - innerD) / 2;
+      const texWall = createWindowTexture(6, 2);
+      const winMat = new THREE.MeshStandardMaterial({ map: texWall });
+
+      // Sayap Kiri & Kanan
+      [-1, 1].forEach(dir => {
+        const sideWall = new THREE.Mesh(new THREE.BoxGeometry(wingW, height, outerD), winMat);
+        sideWall.position.set(dir * (innerW / 2 + wingW / 2), height / 2, 0);
+        sideWall.castShadow = true; sideWall.receiveShadow = true;
+        group.add(sideWall);
+
+        const sideRoof = new THREE.Mesh(new THREE.BoxGeometry(wingW + 0.4, 0.55, outerD + 0.4), roofMat);
+        sideRoof.position.set(dir * (innerW / 2 + wingW / 2), height + 0.275, 0);
+        sideRoof.castShadow = true;
+        group.add(sideRoof);
+      });
+
+      // Sayap Depan & Belakang
+      [-1, 1].forEach(dir => {
+        const frontBackWall = new THREE.Mesh(new THREE.BoxGeometry(innerW, height, wingD), winMat);
+        frontBackWall.position.set(0, height / 2, dir * (innerD / 2 + wingD / 2));
+        frontBackWall.castShadow = true; frontBackWall.receiveShadow = true;
+        group.add(frontBackWall);
+
+        const frontBackRoof = new THREE.Mesh(new THREE.BoxGeometry(innerW + 0.4, 0.55, wingD + 0.4), roofMat);
+        frontBackRoof.position.set(0, height + 0.275, dir * (innerD / 2 + wingD / 2));
+        frontBackRoof.castShadow = true;
+        group.add(frontBackRoof);
+      });
+
+      // Rumput taman di dalam courtyard tengah
+      const courtGrass = new THREE.Mesh(
+        new THREE.BoxGeometry(innerW, 0.12, innerD),
+        new THREE.MeshStandardMaterial({ color: 0x4d7c2a, roughness: 0.9 })
+      );
+      courtGrass.position.y = 0.06;
+      courtGrass.receiveShadow = true;
+      group.add(courtGrass);
+
+      return group;
+    }
+
+    // Helper: Plang Nama Jalan Biru
+    function addRoadSign(text, x, y, z, rotY, width, depth) {
+      const tex = createTextPlaneTexture([text], '#1d4ed8', '#ffffff', 42, '#93c5fd');
+      const sign = new THREE.Mesh(
+        new THREE.PlaneGeometry(width, depth),
+        new THREE.MeshStandardMaterial({ map: tex, roughness: 0.4 })
+      );
+      sign.rotation.x = -Math.PI / 2;
+      sign.rotation.z = rotY;
+      sign.position.set(x, y, z);
+      maketGroup.add(sign);
+    }
+
+    // Helper: Kendaraan Miniatur (Bus Kampus & Mobil)
+    function addMiniVehicle(colorHex, x, y, z, w, h, d) {
+      const car = new THREE.Group();
+      const body = new THREE.Mesh(
+        new THREE.BoxGeometry(w, h, d),
+        new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.3, metalness: 0.2 })
+      );
+      body.position.y = h / 2 + 0.12;
+      body.castShadow = true;
+      car.add(body);
+
+      const cabin = new THREE.Mesh(
+        new THREE.BoxGeometry(w * 0.72, h * 0.45, d * 0.85),
+        new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.2 })
+      );
+      cabin.position.y = h + 0.25;
+      car.add(cabin);
+
+      car.position.set(x, y, z);
+      maketGroup.add(car);
+    }
+
+    // Helper: Pagar Keliling, Gerbang Utama & Papan Nama Polkesraya 3D
+    function createPerimeterFence() {
+      const fenceMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.5 });
+      const pillarMat = new THREE.MeshStandardMaterial({ color: 0x0f766e, roughness: 0.4 });
+      // Pagar depan kiri, tengah, kanan (menyisakan 2 gerbang masuk-keluar)
+      const segments = [
+        { x: -20.5, z: 17.7, w: 10.5, d: 0.25 },
+        { x: 0, z: 17.7, w: 22.0, d: 0.25 },
+        { x: 20.5, z: 17.7, w: 10.5, d: 0.25 },
+        { x: 0, z: -16.6, w: 52.5, d: 0.25 },
+        { x: -26.2, z: 0.5, w: 0.25, d: 34.4 },
+        { x: 26.2, z: 0.5, w: 0.25, d: 34.4 }
+      ];
+      segments.forEach(s => {
+        const wall = new THREE.Mesh(new THREE.BoxGeometry(s.w, 0.7, s.d), fenceMat);
+        wall.position.set(s.x, 0.45, s.z);
+        wall.castShadow = true;
+        maketGroup.add(wall);
+      });
+
+      // Pilar Gerbang Utama Kiri & Kanan (Jl. G. Obos)
+      [-15.1, -11.1, 11.1, 15.1].forEach(gx => {
+        const gatePillar = new THREE.Mesh(new THREE.BoxGeometry(0.65, 1.85, 0.65), pillarMat);
+        gatePillar.position.set(gx, 1.0, 17.7);
+        gatePillar.castShadow = true;
+        maketGroup.add(gatePillar);
+      });
+
+      // Papan Nama Utama Kampus + Logo Kemenkes Poltekkes Palangka Raya di Gerbang Depan
+      const signTex = createCampusLogoBoardTexture();
+      const boardStand = new THREE.Mesh(new THREE.BoxGeometry(7.6, 1.65, 0.35), pillarMat);
+      boardStand.position.set(0, 1.18, 17.95);
+      boardStand.castShadow = true;
+      maketGroup.add(boardStand);
+
+      const boardFront = new THREE.Mesh(
+        new THREE.PlaneGeometry(7.3, 1.42),
+        new THREE.MeshStandardMaterial({ map: signTex, roughness: 0.35 })
+      );
+      boardFront.position.set(0, 1.18, 18.14);
+      maketGroup.add(boardFront);
+    }
+
+    // Helper: Menggambar Logo Horizontal Kemenkes Poltekkes Palangka Raya ke Canvas
+    function drawKemenkesPoltekkesLogo(ctx, x, y, height) {
+      const s = height / 96;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.scale(s, s);
+
+      // Helper rounded rect
+      const roundRect = (rx, ry, rw, rh, rad) => {
+        ctx.beginPath();
+        ctx.moveTo(rx + rad, ry);
+        ctx.lineTo(rx + rw - rad, ry);
+        ctx.quadraticCurveTo(rx + rw, ry, rx + rw, ry + rad);
+        ctx.lineTo(rx + rw, ry + rh - rad);
+        ctx.quadraticCurveTo(rx + rw, ry + rh, rx + rw - rad, ry + rh);
+        ctx.lineTo(rx + rad, ry + rh);
+        ctx.quadraticCurveTo(rx, ry + rh, rx, ry + rh - rad);
+        ctx.lineTo(rx, ry + rad);
+        ctx.quadraticCurveTo(rx, ry, rx + rad, ry);
+        ctx.closePath();
+        ctx.fill();
+      };
+
+      // Kapsul Toska Vertikal & Horizontal Kiri (#00B4A6)
+      ctx.fillStyle = '#00B4A6';
+      roundRect(33, 4, 26, 88, 13);
+      roundRect(4, 35, 42, 26, 13);
+
+      // Kelopak Hijau Limau Kanan Atas (#B4D334)
+      ctx.fillStyle = '#B4D334';
+      ctx.beginPath();
+      ctx.moveTo(62, 45.5);
+      ctx.lineTo(62, 24);
+      ctx.arc(77, 24, 15, Math.PI, 0, false);
+      ctx.lineTo(92, 32.5);
+      ctx.arc(79, 32.5, 13, 0, Math.PI / 2, false);
+      ctx.closePath();
+      ctx.fill();
+
+      // Kelopak Hijau Limau Kanan Bawah (#B4D334)
+      ctx.beginPath();
+      ctx.moveTo(62, 50.5);
+      ctx.lineTo(79, 50.5);
+      ctx.arc(79, 63.5, 13, -Math.PI / 2, 0, false);
+      ctx.lineTo(92, 72);
+      ctx.arc(77, 72, 15, 0, Math.PI, false);
+      ctx.closePath();
+      ctx.fill();
+
+      // Pemisah Silang Putih Bersih
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(31, 46.2, 63, 3.6);
+      ctx.fillRect(57.2, 8, 3.6, 80);
+
+      // Teks Kanan: Kemenkes & Poltekkes Palangka Raya
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillStyle = '#00A9B5';
+      ctx.font = '800 37px Inter, Arial, sans-serif';
+      ctx.fillText('Kemenkes', 108, 47);
+
+      ctx.fillStyle = '#2BB673';
+      ctx.font = '600 23.5px Inter, Arial, sans-serif';
+      ctx.fillText('Poltekkes Palangka Raya', 109, 80);
+
+      ctx.restore();
+    }
+
+    function createCampusLogoBoardTexture() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1024;
+      canvas.height = 200;
+      const ctx = canvas.getContext('2d');
+
+      // Latar belakang papan nama putih bersih berbingkai hijau toska
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, 1024, 200);
+
+      ctx.strokeStyle = '#00B4A6';
+      ctx.lineWidth = 14;
+      ctx.strokeRect(7, 7, 1010, 186);
+
+      // Gambar Logo Horizontal Kemenkes Poltekkes Palangka Raya di sisi kiri
+      drawKemenkesPoltekkesLogo(ctx, 32, 34, 132);
+
+      // Garis pemisah vertikal tipis
+      ctx.fillStyle = '#cbd5e1';
+      ctx.fillRect(625, 32, 3, 136);
+
+      // Teks Lokasi Kampus A di sisi kanan
+      ctx.textAlign = 'left';
+      ctx.fillStyle = '#0f172a';
+      ctx.font = '800 34px Inter, Arial, sans-serif';
+      ctx.fillText('MAKET KAMPUS A', 652, 86);
+
+      ctx.fillStyle = '#0d9488';
+      ctx.font = '700 24px Inter, Arial, sans-serif';
+      ctx.fillText('JL. G. OBOS • SKALA 1:200', 652, 132);
+
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.anisotropy = 4;
+      return tex;
+    }
+
+    // Helper: Pepohonan Rindang & Palem Maket
+    function populateCampusTrees() {
+      const trunkMat = new THREE.MeshStandardMaterial({ color: 0x5c4033 });
+      const leafMat1 = new THREE.MeshStandardMaterial({ color: 0x3f6212, roughness: 0.85 });
+      const leafMat2 = new THREE.MeshStandardMaterial({ color: 0x4d7c0f, roughness: 0.85 });
+
+      const treeCoords = [
+        // Deretan pohon depan sepanjang Jl. G. Obos
+        [-16, 16.4], [-11.5, 16.4], [-7, 16.4], [7, 16.4], [11.5, 16.4], [16, 16.4],
+        // Sekitar Bundaran Gedung A
+        [-4.8, 7.2], [4.8, 7.2], [-5.2, 2.2], [5.2, 2.2],
+        // Sepanjang sisi kiri (Jl. Kyai Maja)
+        [-25.2, 14], [-25.2, 4], [-25.2, -3], [-25.2, -9], [-25.2, -14],
+        // Sepanjang sisi kanan (Jl. Sultan Hasanuddin)
+        [25.2, -4], [25.2, -9], [25.2, -14],
+        // Area taman tengah antara Gedung B/C dan Gedung E
+        [-13.5, -3.5], [-6.5, -3.5], [5.5, -3.5], [15.5, -4.5],
+        // Deretan pohon belakang (Jl. Sam Ratulangi)
+        [-20, -17.8], [-12, -17.8], [-4, -17.8], [4, -17.8], [12, -17.8], [20, -17.8]
+      ];
+
+      treeCoords.forEach(([tx, tz], idx) => {
+        const tree = new THREE.Group();
+        const scale = 0.85 + (idx % 3) * 0.2;
+
+        const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12 * scale, 0.18 * scale, 1.2 * scale, 7), trunkMat);
+        trunk.position.y = 0.6 * scale;
+        trunk.castShadow = true;
+
+        const crown = new THREE.Mesh(
+          new THREE.DodecahedronGeometry(0.95 * scale, 1),
+          idx % 2 === 0 ? leafMat1 : leafMat2
+        );
+        crown.position.y = 1.65 * scale;
+        crown.castShadow = true;
+
+        tree.add(trunk, crown);
+        tree.position.set(tx, 0.18, tz);
+        maketGroup.add(tree);
+      });
+    }
+
+    // Daftarkan mesh bangunan agar bisa diklik (Raycasting) & di-highlight
+    function registerBuilding(code, group) {
+      group.userData.buildingCode = code;
+      group.traverse(child => {
+        if (child.isMesh) {
+          child.userData.buildingCode = code;
+        }
+      });
+      maketGroup.add(group);
+      buildingMeshes[code] = group;
+    }
+
+    // =========================================================================
+    // 6. UI INTERAKTIF: PIN LABEL 3D->2D, TOMBOL CEPAT A-L & KARTU DETAIL
+    // =========================================================================
+    let isDraggingBar = false;
+    let barDraggedMoved = false;
+
+    function scrollBuildingBar(offset) {
+      const container = document.getElementById('building-buttons');
+      if (!container) return;
+      container.scrollBy({ left: offset, behavior: 'smooth' });
+    }
+
+    function setupUIButtons() {
+      const container = document.getElementById('building-buttons');
+      BUILDINGS_DATA.forEach(item => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.id = `nav-btn-${item.code}`;
+        btn.onclick = () => {
+          // Cegah klik terpicu jika pengguna baru saja menggeser (drag) bar
+          if (barDraggedMoved) return;
+          focusBuilding(item.code);
+        };
+        btn.className = 'shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800/95 hover:bg-teal-600/40 border border-slate-700 hover:border-teal-400 text-xs font-medium text-slate-200 transition active:scale-95';
+        btn.innerHTML = `
+          <span class="w-5 h-5 rounded-lg bg-rose-600 text-white font-bold text-[11px] flex items-center justify-center shrink-0">${item.code}</span>
+          <span class="whitespace-nowrap">${item.name.replace(/^Gedung\s+/i, '')}</span>
+        `;
+        container.appendChild(btn);
+      });
+
+      // Dukungan Drag-to-Scroll dengan Mouse & Wheel Horizontal pada bar bawah
+      let startX = 0;
+      let scrollLeftStart = 0;
+
+      container.addEventListener('mousedown', (e) => {
+        isDraggingBar = true;
+        barDraggedMoved = false;
+        startX = e.pageX - container.offsetLeft;
+        scrollLeftStart = container.scrollLeft;
+      });
+
+      window.addEventListener('mouseup', () => {
+        isDraggingBar = false;
+        setTimeout(() => { barDraggedMoved = false; }, 50);
+      });
+
+      container.addEventListener('mousemove', (e) => {
+        if (!isDraggingBar) return;
+        e.preventDefault();
+        const x = e.pageX - container.offsetLeft;
+        const walk = (x - startX) * 1.4;
+        if (Math.abs(walk) > 5) {
+          barDraggedMoved = true;
+        }
+        container.scrollLeft = scrollLeftStart - walk;
+      });
+
+      container.addEventListener('wheel', (e) => {
+        if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+          e.preventDefault();
+          container.scrollLeft += e.deltaY;
+        }
+      }, { passive: false });
+
+      // Isolasi event touch pada footer & info-card agar tidak bocor ke canvas 3D
+      const bottomBar = document.getElementById('bottom-ui-bar');
+      ['touchstart', 'touchmove', 'touchend', 'pointerdown', 'wheel'].forEach(evt => {
+        bottomBar.addEventListener(evt, (e) => e.stopPropagation(), { passive: true });
+      });
+
+      const infoCard = document.getElementById('info-card');
+      ['touchstart', 'touchmove', 'touchend', 'pointerdown', 'wheel'].forEach(evt => {
+        infoCard.addEventListener(evt, (e) => e.stopPropagation(), { passive: true });
+      });
+
+      // Isolasi event pada panel kontrol kamera mengambang (Zoom In, Zoom Out, Reset)
+      const camControls = document.getElementById('floating-camera-controls');
+      if (camControls) {
+        ['touchstart', 'touchmove', 'touchend', 'pointerdown', 'wheel'].forEach(evt => {
+          camControls.addEventListener(evt, (e) => e.stopPropagation(), { passive: true });
+        });
+      }
+    }
+
+    function setupPinLabels() {
+      const layer = document.getElementById('pins-layer');
+      BUILDINGS_DATA.forEach(item => {
+        const el = document.createElement('div');
+        el.id = `pin-3d-${item.code}`;
+        el.className = 'pin-label flex flex-col items-center';
+        el.onclick = (e) => {
+          e.stopPropagation();
+          focusBuilding(item.code);
+        };
+        el.innerHTML = `
+          <div class="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-rose-600/95 border-2 border-white text-white font-extrabold text-xs sm:text-sm flex items-center justify-center shadow-lg shadow-black/50">
+            ${item.code}
+          </div>
+          <div class="w-0.5 h-2.5 bg-white/90"></div>
+        `;
+        layer.appendChild(el);
+        pinElements[item.code] = el;
+      });
+    }
+
+    function updatePinsPosition() {
+      if (!showLabels) return;
+      const tempV = new THREE.Vector3();
+      const widthHalf = window.innerWidth / 2;
+      const heightHalf = window.innerHeight / 2;
+
+      BUILDINGS_DATA.forEach(item => {
+        const el = pinElements[item.code];
+        if (!el) return;
+
+        tempV.set(item.pos.x, item.pinHeight, item.pos.z);
+        tempV.project(camera);
+
+        // Sembunyikan jika di belakang kamera
+        if (tempV.z > 1) {
+          el.style.display = 'none';
+          return;
+        }
+
+        const x = (tempV.x * widthHalf) + widthHalf;
+        const y = -(tempV.y * heightHalf) + heightHalf;
+
+        el.style.display = 'flex';
+        el.style.left = `${x}px`;
+        el.style.top = `${y}px`;
+      });
+    }
+
+    function focusBuilding(code) {
+      const data = BUILDINGS_DATA.find(b => b.code === code);
+      if (!data) return;
+
+      selectedCode = code;
+
+      // Update status aktif pada tombol bottom bar & pin
+      BUILDINGS_DATA.forEach(b => {
+        const btn = document.getElementById(`nav-btn-${b.code}`);
+        const pin = document.getElementById(`pin-3d-${b.code}`);
+        if (b.code === code) {
+          btn?.classList.add('ring-2', 'ring-teal-400', 'bg-teal-900/60');
+          btn?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+          pin?.classList.add('active');
+        } else {
+          btn?.classList.remove('ring-2', 'ring-teal-400', 'bg-teal-900/60');
+          pin?.classList.remove('active');
+        }
+      });
+
+      // Highlight emissive lembut pada gedung 3D yang dipilih
+      Object.entries(buildingMeshes).forEach(([bCode, grp]) => {
+        grp.traverse(child => {
+          if (child.isMesh && child.material && child.material.emissive) {
+            if (bCode === code) {
+              child.material.emissive.setHex(0x0d9488);
+              child.material.emissiveIntensity = 0.25;
+            } else {
+              child.material.emissive.setHex(0x000000);
+              child.material.emissiveIntensity = 0;
+            }
+          }
+        });
+      });
+
+      // Animasi kamera mendekati gedung terpilih
+      controls.autoRotate = false;
+      document.getElementById('rotate-dot').classList.replace('bg-emerald-400', 'bg-slate-500');
+
+      controlsTargetPos = new THREE.Vector3(data.pos.x, 1.5, data.pos.z);
+      cameraTargetPos = new THREE.Vector3(
+        data.pos.x + (data.pos.x >= 0 ? 11 : -11),
+        16,
+        data.pos.z + 16
+      );
+
+      // Tampilkan Kartu Informasi Detail
+      document.getElementById('card-code').innerText = data.code;
+      document.getElementById('card-category').innerText = data.category;
+      document.getElementById('card-title').innerText = data.name;
+      document.getElementById('card-desc').innerText = data.desc;
+      document.getElementById('card-floors').innerText = data.floors;
+      document.getElementById('card-zone').innerText = data.zone;
+
+      const card = document.getElementById('info-card');
+      card.classList.remove('translate-x-[130%]', 'opacity-0');
+    }
+
+    function closeInfoCard() {
+      const card = document.getElementById('info-card');
+      card.classList.add('translate-x-[130%]', 'opacity-0');
+      selectedCode = null;
+      Object.values(buildingMeshes).forEach(grp => {
+        grp.traverse(child => {
+          if (child.isMesh && child.material && child.material.emissive) {
+            child.material.emissive.setHex(0x000000);
+          }
+        });
+      });
+    }
+
+    // =========================================================================
+    // 7. PRESET KAMERA, ZOOM IN/OUT, RESET VIEW & INTERAKSI KLIK 3D
+    // =========================================================================
+    function zoomCamera(scaleFactor) {
+      // Hentikan rotasi otomatis agar pengguna dapat fokus memperbesar/memperkecil
+      if (controls.autoRotate) {
+        controls.autoRotate = false;
+        document.getElementById('rotate-dot').classList.replace('bg-emerald-400', 'bg-slate-500');
+      }
+
+      const currentTarget = controlsTargetPos ? controlsTargetPos.clone() : controls.target.clone();
+      const baseCamPos = cameraTargetPos ? cameraTargetPos.clone() : camera.position.clone();
+      const offset = baseCamPos.clone().sub(currentTarget);
+
+      let currentDist = offset.length();
+      if (currentDist < 0.001) {
+        offset.set(0, 26, 28);
+        currentDist = offset.length();
+      }
+
+      // Batasi jarak zoom dalam rentang minDistance dan maxDistance OrbitControls
+      const targetDist = THREE.MathUtils.clamp(
+        currentDist * scaleFactor,
+        controls.minDistance,
+        controls.maxDistance
+      );
+
+      offset.normalize().multiplyScalar(targetDist);
+      controlsTargetPos = currentTarget;
+      cameraTargetPos = currentTarget.clone().add(offset);
+    }
+
+    function resetCameraView() {
+      // Hentikan rotasi otomatis
+      controls.autoRotate = false;
+      document.getElementById('rotate-dot').classList.replace('bg-emerald-400', 'bg-slate-500');
+
+      // Tutup kartu info gedung & hapus highlight sorotan bangunan
+      closeInfoCard();
+
+      // Hapus ring aktif pada seluruh tombol navigasi bawah & pin 3D
+      BUILDINGS_DATA.forEach(b => {
+        document.getElementById(`nav-btn-${b.code}`)?.classList.remove('ring-2', 'ring-teal-400', 'bg-teal-900/60');
+        document.getElementById(`pin-3d-${b.code}`)?.classList.remove('active');
+      });
+
+      // Kembalikan kamera & target ke posisi awal maket (x: 0, y: 26, z: 28) -> target (0, 0, 0)
+      controlsTargetPos = new THREE.Vector3(0, 0, 0);
+      cameraTargetPos = new THREE.Vector3(0, 26, 28);
+      showToast('Tampilan kamera dikembalikan ke posisi awal');
+    }
+
+    function setCameraPreset(preset) {
+      controlsTargetPos = new THREE.Vector3(0, 0, 0);
+      if (preset === 'iso') {
+        cameraTargetPos = new THREE.Vector3(24, 34, 42);
+      } else if (preset === 'top') {
+        cameraTargetPos = new THREE.Vector3(0, 56, 2);
+      } else if (preset === 'front') {
+        cameraTargetPos = new THREE.Vector3(0, 18, 48);
+      }
+    }
+
+    function toggleAutoRotate() {
+      controls.autoRotate = !controls.autoRotate;
+      controls.autoRotateSpeed = 1.4;
+      const dot = document.getElementById('rotate-dot');
+      if (controls.autoRotate) {
+        dot.classList.replace('bg-slate-500', 'bg-emerald-400');
+        showToast('Rotasi otomatis 360° diaktifkan');
+      } else {
+        dot.classList.replace('bg-emerald-400', 'bg-slate-500');
+      }
+    }
+
+    function toggleLabels() {
+      showLabels = !showLabels;
+      const layer = document.getElementById('pins-layer');
+      const dot = document.getElementById('label-dot');
+      layer.style.display = showLabels ? 'block' : 'none';
+      if (showLabels) {
+        dot.classList.replace('bg-slate-500', 'bg-emerald-400');
+      } else {
+        dot.classList.replace('bg-emerald-400', 'bg-slate-500');
+      }
+    }
+
+    function setupInteractionEvents() {
+      let downX = 0, downY = 0;
+
+      renderer.domElement.addEventListener('pointerdown', (e) => {
+        downX = e.clientX;
+        downY = e.clientY;
+        // Batalkan transisi kamera otomatis saat user menggerakkan manual
+        cameraTargetPos = null;
+        controlsTargetPos = null;
+      });
+
+      renderer.domElement.addEventListener('pointerup', (e) => {
+        const dist = Math.hypot(e.clientX - downX, e.clientY - downY);
+        if (dist > 6) return; // Abaikan jika sedang drag orbit
+
+        pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
+        pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+        raycaster.setFromCamera(pointer, camera);
+        const intersects = raycaster.intersectObjects(maketGroup.children, true);
+
+        for (let i = 0; i < intersects.length; i++) {
+          const code = intersects[i].object.userData.buildingCode;
+          if (code) {
+            focusBuilding(code);
+            break;
+          }
+        }
+      });
+
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+    }
+
+    // =========================================================================
+    // 8. MODE KAMERA AR (WEBAR OVERLAY) & GENERATOR QR CODE
+    // =========================================================================
+    async function toggleARMode() {
+      const video = document.getElementById('ar-video');
+      const btnText = document.getElementById('ar-btn-text');
+
+      if (!isARMode) {
+        try {
+          arStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'environment' },
+            audio: false
+          });
+          video.srcObject = arStream;
+          video.style.display = 'block';
+          scene.background = null; // Transparan agar kamera terlihat di belakang 3D
+          scene.fog = null;
+          isARMode = true;
+          btnText.innerText = 'Keluar Mode AR';
+          showToast('Mode Kamera AR Aktif! Arahkan ke meja/maket dan cubit untuk menyesuaikan ukuran.');
+        } catch (err) {
+          showToast('Izin kamera tidak tersedia di perangkat/iframe ini. Gunakan mode 3D Interaktif.');
+        }
+      } else {
+        if (arStream) {
+          arStream.getTracks().forEach(track => track.stop());
+          arStream = null;
+        }
+        video.style.display = 'none';
+        scene.background = new THREE.Color(0x0f172a);
+        scene.fog = new THREE.FogExp2(0x0f172a, 0.0045);
+        isARMode = false;
+        btnText.innerText = 'Mode Kamera AR';
+        showToast('Kembali ke tampilan Studio 3D.');
+      }
+    }
+
+    function openQRModal() {
+      const modal = document.getElementById('qr-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+
+      const input = document.getElementById('qr-url-input');
+      if (!input.value) {
+        const currentUrl = window.location.href.startsWith('http')
+          ? window.location.href
+          : 'https://ar.poltekkespalangkaraya.ac.id/maket-kampus-a';
+        input.value = currentUrl;
+      }
+      regenerateQR();
+    }
+
+    function closeQRModal() {
+      const modal = document.getElementById('qr-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function regenerateQR() {
+      const qrContainer = document.getElementById('qrcode-canvas');
+      qrContainer.innerHTML = '';
+      const url = document.getElementById('qr-url-input').value.trim() || 'https://ar.poltekkespalangkaraya.ac.id/maket-kampus-a';
+
+      new QRCode(qrContainer, {
+        text: url,
+        width: 180,
+        height: 180,
+        colorDark: '#0f172a',
+        colorLight: '#ffffff',
+        correctLevel: QRCode.CorrectLevel.H
+      });
+    }
+
+    function downloadQRSticker() {
+      const qrCanvas = document.querySelector('#qrcode-canvas canvas');
+      if (!qrCanvas) return;
+
+      // Gabungkan QR Code dengan bingkai judul & logo resmi Kemenkes Poltekkes Palangka Raya
+      const sticker = document.createElement('canvas');
+      sticker.width = 420;
+      sticker.height = 540;
+      const ctx = sticker.getContext('2d');
+
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, 420, 540);
+
+      ctx.strokeStyle = '#00B4A6';
+      ctx.lineWidth = 12;
+      ctx.strokeRect(12, 12, 396, 516);
+
+      // Header Logo Horizontal Kemenkes Poltekkes Palangka Raya pada Stiker PNG
+      drawKemenkesPoltekkesLogo(ctx, 42, 28, 66);
+
+      // Garis pemisah header
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(36, 108);
+      ctx.lineTo(384, 108);
+      ctx.stroke();
+
+      // Gambar QR Code di tengah
+      ctx.drawImage(qrCanvas, 75, 124, 270, 270);
+
+      ctx.fillStyle = '#0f172a';
+      ctx.font = 'bold 22px Inter, Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('SCAN 3D AR MAKET', 210, 432);
+
+      ctx.fillStyle = '#0d9488';
+      ctx.font = 'bold 16px Inter, Arial, sans-serif';
+      ctx.fillText('KAMPUS A (SKALA 1:200)', 210, 462);
+
+      ctx.fillStyle = '#475569';
+      ctx.font = '13px Inter, Arial, sans-serif';
+      ctx.fillText('Poltekkes Kemenkes Palangka Raya', 210, 492);
+
+      const link = document.createElement('a');
+      link.download = 'QR-AR-Maket-Kampus-A-Poltekkes-Palangka-Raya.png';
+      link.href = sticker.toDataURL('image/png');
+      link.click();
+      showToast('Gambar stiker QR Code berhasil diunduh!');
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast-msg');
+      toast.innerText = msg;
+      toast.classList.remove('opacity-0');
+      clearTimeout(window._toastTimer);
+      window._toastTimer = setTimeout(() => {
+        toast.classList.add('opacity-0');
+      }, 3200);
+    }
+
+    // =========================================================================
+    // 9. ANIMATION LOOP UTAMA
+    // =========================================================================
+    const clock = new THREE.Clock();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const elapsed = clock.getElapsedTime();
+
+      // Animasi kibaran bendera merah putih di depan Gedung A
+      if (flagMesh) {
+        flagMesh.rotation.y = Math.sin(elapsed * 4) * 0.14;
+      }
+
+      // Interpolasi lembut saat kamera berpindah fokus ke gedung
+      if (cameraTargetPos && controlsTargetPos) {
+        camera.position.lerp(cameraTargetPos, 0.07);
+        controls.target.lerp(controlsTargetPos, 0.08);
+        if (camera.position.distanceTo(cameraTargetPos) < 0.25) {
+          cameraTargetPos = null;
+          controlsTargetPos = null;
+        }
+      }
+
+      controls.update();
+      updatePinsPosition();
+      renderer.render(scene, camera);
+    }
+
+    window.onload = function () {
+      initThree();
+      animate();
+    };
+  </script>
+</body>
+</html>
